@@ -1,0 +1,5 @@
+playwright
+matplotlib
+lxml
+PyYAML
+# tkinter  # built-in with Python on Windows; do not install via pip
