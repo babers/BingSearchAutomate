@@ -11,6 +11,7 @@
 **BingSearchAutomate-Headless** is a production-ready Python application that automates Microsoft Rewards Bing search activities. It uses Playwright for headless browser automation with Microsoft Edge to perform searches, monitor reward points, and manage search quotas efficiently.
 
 The application includes:
+
 - ✅ Headless browser automation with Playwright
 - ✅ Real-time rewards point monitoring
 - ✅ Configurable search intervals and quotas
@@ -23,6 +24,7 @@ The application includes:
 ## Features
 
 ### Core Automation Features
+
 - **Headless Browser Control**: Automates Microsoft Edge browser via Playwright API
 - **Search Automation**: Executes Bing searches with configurable intervals and quotas
 - **Rewards Monitoring**: Real-time tracking of Microsoft Rewards points
@@ -30,6 +32,7 @@ The application includes:
 - **Search History**: Persists all searches in SQLite database for tracking
 
 ### Advanced Capabilities
+
 - **Human Behavior Simulation**
   - Variable typing speeds
   - Random typo generation with configurable probability
@@ -55,37 +58,40 @@ The application includes:
 ## Requirements
 
 ### System Requirements
+
 - **OS**: Windows (Microsoft Edge required)
 - **Python**: 3.8 or higher
 - **Memory**: 512 MB minimum
 - **Internet**: Active internet connection
 
 ### Dependencies
-```
+
 playwright          # Browser automation
 matplotlib          # Data visualization
 lxml               # XML parsing
 PyYAML             # Configuration management
 tkinter            # GUI (built-in with Python on Windows)
-```
 
 ## Installation
 
 ### Quick Start
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/babers/BingSearchAutomate-Headless.git
    cd BingSearchAutomate-Headless
    ```
 
 2. **Install dependencies**
+
    ```bash
    pip install -r requirements.txt
    python -m playwright install
    ```
 
 3. **Configure the application**
+
    ```bash
    # Copy config template and customize
    cp config.yaml.example config.yaml
@@ -93,6 +99,7 @@ tkinter            # GUI (built-in with Python on Windows)
    ```
 
 4. **Run the application**
+
    ```bash
    python main.py
    ```
@@ -100,6 +107,7 @@ tkinter            # GUI (built-in with Python on Windows)
 ### Automatic Setup
 
 For automatic dependency installation and execution:
+
 ```bash
 python tools/run_ensure.py
 ```
@@ -109,6 +117,7 @@ python tools/run_ensure.py
 The application uses a `config.yaml` file for all settings. Key configuration options:
 
 ### Search Settings
+
 ```yaml
 search_settings:
   target_points: 90              # Target points per session
@@ -121,6 +130,7 @@ search_settings:
 ```
 
 ### Browser Settings
+
 ```yaml
 browser:
   headless: true                 # Run in headless mode
@@ -129,6 +139,7 @@ browser:
 ```
 
 ### Stealth Settings
+
 ```yaml
 stealth:
   simulate_mistakes: true        # Enable typo simulation
@@ -138,6 +149,7 @@ stealth:
 ```
 
 ### Proxy Configuration
+
 ```yaml
 proxy:
   enabled: false                 # Enable/disable proxies
@@ -164,6 +176,7 @@ python main.py --help
 ### GUI Interface
 
 The application launches a Tkinter GUI with:
+
 - Real-time search display
 - Points counter
 - Start/Stop controls
@@ -188,11 +201,9 @@ browser_controller = BrowserController(config, data_manager)
 
 # Run automation
 browser_controller.run()
-```
 
 ## Project Structure
 
-```
 BingSearchAutomate-Headless/
 ├── main.py                          # Application entry point
 ├── config.py                        # Configuration management
@@ -254,19 +265,23 @@ Comprehensive documentation is available in the `docs/` folder:
 ### Common Issues
 
 #### Browser Not Found
+
 - Ensure Microsoft Edge is installed
 - Run diagnostic tool: `python tools/diag_edge_driver.py`
 
 #### Network Connectivity Issues
+
 - Check internet connection
 - Enable network retry in settings
 - Check proxy configuration if enabled
 
 #### XPath Extraction Failures
+
 - Run validation tool: `python tools/validate_rewards_extraction.py`
 - Update XPath in config.yaml if website structure changed
 
 #### Database Errors
+
 - The app auto-creates `searches.db` on first run
 - Clear database if corrupted: Remove `searches.db` and restart
 
@@ -307,6 +322,7 @@ python tools/test_human_typing.py
 ### Code Quality
 
 The project follows Python best practices:
+
 - PEP 8 style guidelines
 - Comprehensive error handling
 - Detailed logging throughout
@@ -336,6 +352,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contributing
 
 Contributions are welcome! Please feel free to submit pull requests for:
+
 - Bug fixes
 - Feature enhancements
 - Documentation improvements
@@ -344,6 +361,7 @@ Contributions are welcome! Please feel free to submit pull requests for:
 ## Support
 
 For issues, questions, or suggestions:
+
 - Check the [documentation](docs/)
 - Review [test files](tools/) for usage examples
 - Check troubleshooting section above
@@ -351,6 +369,7 @@ For issues, questions, or suggestions:
 ## Changelog
 
 ### v1.0.0 (Current)
+
 - ✅ Full Playwright integration with Microsoft Edge
 - ✅ GUI for monitoring and control
 - ✅ Human behavior simulation (stealth features)
@@ -365,6 +384,3 @@ For issues, questions, or suggestions:
 **Last Updated**: February 13, 2026  
 **Version**: 1.0.0  
 **Status**: Production Ready ✅
-
-
-
