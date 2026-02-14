@@ -15,6 +15,7 @@ from data_manager import DataManager
 from rewards_watcher import RewardsWatcher
 from daily_topics import DailyTopics
 from utils.runtime_topic_generator import RuntimeTopicGenerator
+from version import __version__
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -94,6 +95,10 @@ def main():
 
     # Set up logging
     setup_logging(log_level=config.log_level, log_file=config.log_file_path, log_format=config.log_format)
+    
+    # Display version
+    logger = logging.getLogger(__name__)
+    logger.info(f"Bing Search Automator v{__version__} starting...")
 
     # Create and run the application
     app = Application(config)

@@ -3,6 +3,7 @@
 > Automated Microsoft Rewards Bing search activities using headless browser automation with Playwright
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
+[![Version](https://img.shields.io/badge/Version-2.0.0-brightgreen.svg)](version.py)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
 

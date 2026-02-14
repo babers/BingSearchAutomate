@@ -10,6 +10,7 @@ from matplotlib.ticker import MaxNLocator
 from utils.elapsed_timer import get_elapsed, start as start_timer, stop as stop_timer
 from utils.network import is_connected
 from utils.metrics import MetricsCollector
+from version import __version__
 
 class GUI:
     def __init__(self, config, data_manager, browser_controller, *args, **kwargs):
@@ -24,7 +25,7 @@ class GUI:
 
         self.logger = logging.getLogger(__name__)
         
-        self.root.title("Bing Search Automator (Headless)")
+        self.root.title(f"Bing Search Automator v{__version__}")
         self.search_started = False
         self.setup_ui()
         self.schedule_update()
