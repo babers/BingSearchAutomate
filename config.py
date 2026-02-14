@@ -7,7 +7,19 @@ per-user app data directory so the app remains writable when installed.
 import yaml
 import logging
 import os
+from typing import Optional, Dict, Any
 from utils.paths import get_app_data_dir, resource_path
+
+
+def deep_merge(base: Dict, override: Dict) -> Dict:
+    """Deep merge two dictionaries, with override taking precedence."""
+    result = base.copy()
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
 
 class Config:
     """
@@ -68,9 +80,13 @@ class Config:
         self.logger.info("Configuration loaded successfully.")
 
     @classmethod
-    def from_yaml(cls, file_path: str | None = 'config.yaml'):
+    def from_yaml(cls, file_path: str | None = 'config.yaml', profile: Optional[str] = None):
         """
         Loads configuration from a YAML file and creates a Config object.
+        
+        Args:
+            file_path: Path to the configuration file
+            profile: Optional profile name to use (e.g., 'stealth_mode', 'speed_mode')
         """
         try:
             path = resource_path(file_path) if file_path else resource_path('config.yaml')
@@ -78,6 +94,21 @@ class Config:
                 path = file_path or 'config.yaml'
             with open(path, 'r') as f:
                 config_data = yaml.safe_load(f)
+            
+            # Apply profile if specified
+            if profile:
+                profiles = config_data.get('profiles', {})
+                if profile in profiles:
+                    logging.info(f"Applying configuration profile: {profile}")
+                    profile_data = profiles[profile]
+                    # Deep merge profile settings over base config
+                    config_data = deep_merge(config_data, profile_data)
+                else:
+                    available_profiles = ', '.join(profiles.keys())
+                    logging.warning(
+                        f"Profile '{profile}' not found. Available profiles: {available_profiles}"
+                    )
+            
             cfg = cls(config_data)
 
             app_dir = get_app_data_dir()

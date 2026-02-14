@@ -37,6 +37,7 @@ class Application:
         self.rewards_watcher = RewardsWatcher(self.config, self.data_manager, self.gui)
 
         self.browser_controller.gui = self.gui
+        self.browser_controller.metrics_collector = self.gui.metrics_collector
         self.gui.rewards_watcher = self.rewards_watcher
         self.logger.info("Application components initialized successfully.")
 
@@ -85,10 +86,11 @@ def main():
     """Entry point of the application."""
     parser = argparse.ArgumentParser(description="Bing Search Automator (Headless with Playwright)")
     parser.add_argument('--config', default='config.yaml', help='Path to the configuration file (default: config.yaml)')
+    parser.add_argument('--profile', default=None, help='Configuration profile to use (e.g., stealth_mode, speed_mode, balanced_mode)')
     args = parser.parse_args()
 
-    # Load configuration
-    config = Config.from_yaml(args.config)
+    # Load configuration with optional profile
+    config = Config.from_yaml(args.config, profile=args.profile)
 
     # Set up logging
     setup_logging(log_level=config.log_level, log_file=config.log_file_path, log_format=config.log_format)

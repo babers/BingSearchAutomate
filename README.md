@@ -6,6 +6,21 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
 
+## 🆕 Latest Enhancements (v2.0)
+
+**Major performance and feature improvements!** See [ENHANCEMENTS.md](ENHANCEMENTS.md) for full details.
+
+- ✅ **Persistent DB Connection** - 50-70% faster database operations
+- ✅ **Exponential Backoff Retry** - Better error resilience  
+- ✅ **Type Hints** - Full type coverage for better code quality
+- ✅ **LRU Cache** - Bounded memory usage in topic generator
+- ✅ **Statistics Dashboard** - Real-time success rate, ETA, searches/min
+- ✅ **Configuration Profiles** - Switch between stealth/balanced/speed modes
+- ✅ **Smart Pause Algorithm** - Adaptive pausing based on points velocity
+- ✅ **Selector Fallbacks** - Robust points extraction with multiple selectors
+
+---
+
 ## Overview
 
 **BingSearchAutomate-Headless** is a production-ready Python application that automates Microsoft Rewards Bing search activities. It uses Playwright for headless browser automation with Microsoft Edge to perform searches, monitor reward points, and manage search quotas efficiently.
@@ -13,13 +28,14 @@
 The application includes:
 
 - ✅ Headless browser automation with Playwright
-- ✅ Real-time rewards point monitoring
+- ✅ Real-time rewards point monitoring with statistics dashboard
 - ✅ Configurable search intervals and quotas
 - ✅ Tkinter-based GUI for monitoring and control
 - ✅ Human-like behavior simulation (typing delays, mouse movements)
 - ✅ Proxy rotation support
-- ✅ Database-backed search history
-- ✅ Comprehensive logging and error handling
+- ✅ Database-backed search history with persistent connections
+- ✅ Comprehensive logging and error handling with exponential backoff
+- ✅ Multiple configuration profiles (stealth, balanced, speed, testing)
 
 ## Features
 
@@ -166,22 +182,44 @@ For detailed configuration, see [config.yaml](config.yaml).
 ### Command Line
 
 ```bash
-# Run with default configuration
+# Run with default configuration (balanced mode)
 python main.py
+
+# Use a specific profile
+python main.py --profile stealth_mode
+python main.py --profile speed_mode
+python main.py --profile testing_mode
+
+# Use custom config file
+python main.py --config custom_config.yaml
+
+# Combine options
+python main.py --config custom_config.yaml --profile stealth_mode
 
 # Display available arguments
 python main.py --help
 ```
 
+### Configuration Profiles
+
+Choose from pre-configured profiles:
+
+- **`balanced_mode`** (default) - Good mix of speed and stealth
+- **`stealth_mode`** - Maximum stealth, slower but most human-like
+- **`speed_mode`** - Faster searches, minimal stealth features
+- **`testing_mode`** - Quick testing with visible browser
+
 ### GUI Interface
 
 The application launches a Tkinter GUI with:
 
+- **Current Status** - Total searches, rewards points, elapsed time, network status
+- **Session Statistics** - Success rate, searches/min, points/search, ETA
 - Real-time search display
-- Points counter
 - Start/Stop controls
-- Status indicators
-- Search history log
+- Current topic display
+- Pause timer
+- Search history graph
 
 ### Programmatic Usage
 

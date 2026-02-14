@@ -45,3 +45,75 @@ stealth:
 logging:
   level: 'DEBUG'
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+# ============================================================================
+# CONFIGURATION PROFILES
+# ============================================================================
+# Pre-configured profiles for different use cases
+# Usage: python main.py --profile stealth_mode
+# ============================================================================
+
+profiles:
+  # Maximum stealth mode - slowest but most human-like behavior
+  stealth_mode:
+    search_settings:
+      searches_before_pause: 5
+      pause_duration_minutes: 2
+      min_sleep_seconds: 20
+      max_sleep_seconds: 40
+    stealth:
+      simulate_mistakes: true
+      mistake_probability: 0.08
+      typing_speed_variance: true
+      random_mouse_movements: true
+    browser:
+      slow_mo_ms: 100
+  
+  # Balanced mode - good mix of speed and stealth (DEFAULT)
+  balanced_mode:
+    search_settings:
+      searches_before_pause: 10
+      pause_duration_minutes: 1
+      min_sleep_seconds: 15
+      max_sleep_seconds: 20
+    stealth:
+      simulate_mistakes: true
+      mistake_probability: 0.05
+      typing_speed_variance: true
+      random_mouse_movements: true
+    browser:
+      slow_mo_ms: 0
+  
+  # Speed mode - faster searches, less stealth features
+  speed_mode:
+    search_settings:
+      searches_before_pause: 15
+      pause_duration_minutes: 1
+      min_sleep_seconds: 5
+      max_sleep_seconds: 10
+    stealth:
+      simulate_mistakes: false
+      mistake_probability: 0.0
+      typing_speed_variance: false
+      random_mouse_movements: false
+    browser:
+      slow_mo_ms: 0
+  
+  # Testing mode - minimal delays for quick testing
+  testing_mode:
+    search_settings:
+      target_points: 10
+      searches_before_pause: 20
+      pause_duration_minutes: 0.5
+      min_sleep_seconds: 2
+      max_sleep_seconds: 3
+    stealth:
+      simulate_mistakes: false
+      mistake_probability: 0.0
+      typing_speed_variance: false
+      random_mouse_movements: false
+    browser:
+      headless: false  # Show browser for debugging
+      slow_mo_ms: 0
+    logging:
+      level: 'DEBUG'

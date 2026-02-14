@@ -8,6 +8,7 @@ import re
 import threading
 import time
 import asyncio
+from typing import Optional
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
 
 from config import Config
@@ -18,13 +19,25 @@ from utils.human_typing import HumanTyping
 from utils.proxy_rotation import create_proxy_rotator_from_config
 from utils.topic_provider import TopicProvider
 
+# Constants
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/130.0.0.0 Safari/537.36"
+)
+VIEWPORT_WIDTH_RANGE = (1366, 1920)
+VIEWPORT_HEIGHT_RANGE = (768, 1080)
+MAX_RETRY_ATTEMPTS = 3
+INITIAL_BACKOFF_SECONDS = 2
+
 class BrowserController:
     def __init__(self, config: Config, data_manager: DataManager, 
-                 topic_provider: TopicProvider, gui=None):
+                 topic_provider: TopicProvider, gui=None, metrics_collector=None):
         self.config = config
         self.data_manager = data_manager
         self.gui = gui
         self.topics_provider = topic_provider  # Injected dependency
+        self.metrics_collector = metrics_collector  # For tracking search statistics
         self.logger = logging.getLogger(__name__)
         self.last_points = 0
         self.stop_event = threading.Event()
@@ -69,14 +82,10 @@ class BrowserController:
             )
             # Create a context with user agent to mimic real browser
             context_kwargs = {
-                "user_agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/130.0.0.0 Safari/537.36"
-                ),
+                "user_agent": USER_AGENT,
                 "viewport": {
-                    "width": random.randint(1366, 1920),
-                    "height": random.randint(768, 1080)
+                    "width": random.randint(*VIEWPORT_WIDTH_RANGE),
+                    "height": random.randint(*VIEWPORT_HEIGHT_RANGE)
                 },
                 "locale": "en-US",
                 "timezone_id": "America/New_York"
@@ -218,7 +227,9 @@ class BrowserController:
                 self.logger.info("Network connectivity available.")
                 return True
             self.logger.warning(f"No internet connectivity detected. Retrying in {retry_seconds} seconds...")
-            time.sleep(retry_seconds)
+            # Use stop_event.wait() instead of time.sleep() for better responsiveness
+            if self.stop_event.wait(timeout=retry_seconds):
+                break
         self.logger.info("Stop requested while waiting for network; aborting wait.")
         return False
 
@@ -239,42 +250,52 @@ class BrowserController:
             # Add realistic human delay before parsing
             await self.page.wait_for_timeout(random.uniform(2000, 4000))
             
-            # Try to find points element using XPath
-            try:
-                points_element = self.page.locator(f"xpath={self.config.points_xpath}").first
-                points_text = await points_element.text_content()
-                
-                self.logger.debug(f"Raw points text from XPath: '{points_text}'")
-                
-                # Extract FIRST number (matching reference implementation)
-                match = re.search(r'\d+', points_text)
-                
-                if match:
-                    points = int(match.group())
-                    self.logger.info(f"Current rewards points: {points}")
-                    # Do NOT modify self.last_points here; leave that to the caller
-                    # so the search loop can compare previous vs current correctly
-                    return points
-                else:
-                    self.logger.warning(f"Could not parse points from text: '{points_text}'")
-                    # Take screenshot for debugging
-                    import datetime
-                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    await self.page.screenshot(path=f"points_error_{timestamp}.png")
-                    return self.last_points
-            except PlaywrightTimeoutError:
-                self.logger.warning("Timeout waiting for points element.")
-                # Take screenshot for debugging
-                import datetime
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                await self.page.screenshot(path=f"points_timeout_{timestamp}.png")
+            # Try multiple selectors with fallback chain
+            selectors = [
+                ("xpath", self.config.points_xpath),
+                ("css", "mee-rewards-user-points-details p"),
+                ("css", "[class*='points'] p"),
+                ("text", "Available points")  # Text-based fallback
+            ]
+            
+            points_text = None
+            successful_selector = None
+            
+            for selector_type, selector in selectors:
+                try:
+                    if selector_type == "xpath":
+                        points_element = self.page.locator(f"xpath={selector}").first
+                    elif selector_type == "css":
+                        points_element = self.page.locator(selector).first
+                    elif selector_type == "text":
+                        # Search for element containing text
+                        points_element = self.page.get_by_text(selector, exact=False).first
+                    
+                    points_text = await points_element.text_content(timeout=5000)
+                    
+                    if points_text:
+                        successful_selector = f"{selector_type}: {selector}"
+                        self.logger.debug(f"Successfully extracted points using {successful_selector}")
+                        break
+                except Exception as e:
+                    self.logger.debug(f"Selector {selector_type}='{selector}' failed: {e}")
+                    continue
+            
+            if not points_text:
+                self.logger.warning("All selectors failed to extract points")
                 return self.last_points
-            except Exception as inner_e:
-                self.logger.warning(f"Error extracting points: {inner_e}")
-                # Take screenshot for debugging
-                import datetime
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                await self.page.screenshot(path=f"points_inner_error_{timestamp}.png")
+            
+            self.logger.debug(f"Raw points text from {successful_selector}: '{points_text}'")
+            
+            # Extract FIRST number (matching reference implementation)
+            match = re.search(r'\d+', points_text)
+            
+            if match:
+                points = int(match.group())
+                self.logger.info(f"Current rewards points: {points} (extracted via {successful_selector})")
+                return points
+            else:
+                self.logger.warning(f"Could not parse points from text: '{points_text}'")
                 return self.last_points
                 
         except PlaywrightError as e:
@@ -289,19 +310,13 @@ class BrowserController:
             return self.last_points
         except Exception as e:
             self.logger.error(f"Error while getting points: {e}", exc_info=True)
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            try:
-                if self.page:
-                    await self.page.screenshot(path=f"points_exception_{timestamp}.png")
-            except Exception:
-                pass
             return self.last_points
 
-    async def _perform_search(self, term: str):
-        """Performs a single search on Bing."""
-        max_retries = 3
-        for attempt in range(max_retries):
+    async def _perform_search(self, term: str) -> None:
+        """Performs a single search on Bing with exponential backoff retry."""
+        for attempt in range(MAX_RETRY_ATTEMPTS):
+            backoff_delay = INITIAL_BACKOFF_SECONDS * (2 ** attempt)  # Exponential: 2s, 4s, 8s
+            
             try:
                 if not is_connected():
                     self.logger.warning("No internet connection before search. Waiting...")
@@ -311,7 +326,7 @@ class BrowserController:
                 # Ensure browser is ready before searching
                 await self._ensure_browser_ready()
                 
-                self.logger.info(f"Navigating to search URL")
+                self.logger.info(f"Navigating to search URL (attempt {attempt + 1}/{MAX_RETRY_ATTEMPTS})")
                 await self.page.goto(self.config.search_url, wait_until='networkidle')
                 
                 # Add human-like random delay before typing
@@ -347,32 +362,29 @@ class BrowserController:
                 return
                 
             except PlaywrightError as e:
-                # Browser might have been closed
+                # Browser might have been closed (retryable)
                 if "closed" in str(e).lower():
                     self.logger.warning(f"Browser was closed during search attempt {attempt + 1}. Marking for recreation.")
                     self.page = None
                     self.browser_context = None
                     self.browser = None
-                    if attempt < max_retries - 1:
-                        # Will recreate on next attempt via _ensure_browser_ready
+                    if attempt < MAX_RETRY_ATTEMPTS - 1:
+                        self.logger.info(f"Retrying in {backoff_delay}s (exponential backoff)...")
+                        await asyncio.sleep(backoff_delay)
                         continue
                 self.logger.warning(f"Playwright error on attempt {attempt + 1} for term '{term}': {e}")
-                if attempt == max_retries - 1:
-                    self.logger.error(f"All retries failed for term '{term}'.")
+                if attempt == MAX_RETRY_ATTEMPTS - 1:
+                    self.logger.error(f"All retries exhausted for term '{term}'.")
                     raise
-                await asyncio.sleep(2)  # Use asyncio.sleep instead of page.wait_for_timeout
+                self.logger.info(f"Retrying in {backoff_delay}s (exponential backoff)...")
+                await asyncio.sleep(backoff_delay)
             except Exception as e:
                 self.logger.warning(f"Search attempt {attempt + 1} failed for term '{term}': {e}")
-                if attempt == max_retries - 1:
-                    self.logger.error(f"All retries failed for term '{term}'.")
+                if attempt == MAX_RETRY_ATTEMPTS - 1:
+                    self.logger.error(f"All retries exhausted for term '{term}'.")
                     raise
-                try:
-                    if self.page:
-                        await self.page.wait_for_timeout(2000)
-                    else:
-                        await asyncio.sleep(2)
-                except Exception:
-                    await asyncio.sleep(2)
+                self.logger.info(f"Retrying in {backoff_delay}s (exponential backoff)...")
+                await asyncio.sleep(backoff_delay)
 
     def start_searching(self):
         """Starts the search loop in a new thread."""
@@ -417,16 +429,38 @@ class BrowserController:
                 if self.gui:
                     self.gui.set_current_topic(term)
 
-                await self._perform_search(term)
-                current_points = await self.get_current_points()
-                self.data_manager.update_rewards(current_points)
-                self.data_manager.add_search(term, current_points)
+                # Record search start time for metrics
+                search_start_time = time.time()
+                points_before_search = await self.get_current_points()
                 
-                # Update GUI immediately with new points and search count
-                if self.gui:
-                    self.gui.update_rewards_label(current_points)
-                    counts = self.data_manager.get_current_counts()
-                    self.gui.update_total_label(counts['total'])
+                try:
+                    await self._perform_search(term)
+                    current_points = await self.get_current_points()
+                    self.data_manager.update_rewards(current_points)
+                    self.data_manager.add_search(term, current_points)
+                    
+                    # Calculate search duration and points gained
+                    search_duration_ms = (time.time() - search_start_time) * 1000
+                    points_gained = max(0, current_points - points_before_search)
+                    
+                    # Record successful search in metrics
+                    if self.metrics_collector:
+                        self.metrics_collector.record_search_duration(search_duration_ms, points_gained)
+                    
+                    # Update GUI immediately with new points and search count
+                    if self.gui:
+                        self.gui.update_rewards_label(current_points)
+                        counts = self.data_manager.get_current_counts()
+                        self.gui.update_total_label(counts['total'])
+                        
+                except Exception as e:
+                    self.logger.error(f"Search failed for term '{term}': {e}")
+                    current_points = await self.get_current_points()
+                    # Record failed search in metrics
+                    if self.metrics_collector:
+                        self.metrics_collector.record_error(type(e).__name__)
+                    # Continue to next search
+                    continue
 
                 if current_points > self.last_points:
                     self.last_points = current_points
@@ -434,18 +468,35 @@ class BrowserController:
                 elif current_points == self.last_points:
                     unchanged_points_counter += 1
                     if unchanged_points_counter >= self.config.searches_before_pause:
-                        self.logger.info(f"Rewards points unchanged for {self.config.searches_before_pause} searches. Pausing...")
+                        # Smart pause: calculate adaptive pause duration based on velocity
+                        base_pause_seconds = self.config.pause_duration_minutes * 60
+                        # For each unsuccessful search beyond the threshold, add 10% more pause time
+                        extra_pause_factor = 1 + (unchanged_points_counter - self.config.searches_before_pause) * 0.1
+                        adaptive_pause = int(base_pause_seconds * extra_pause_factor)
+                        # Cap at 5x the base pause duration
+                        adaptive_pause = min(adaptive_pause, base_pause_seconds * 5)
+                        
+                        self.logger.info(
+                            f"Rewards points unchanged for {unchanged_points_counter} searches. "
+                            f"Pausing for {adaptive_pause}s (adaptive: {extra_pause_factor:.1f}x base)..."
+                        )
                         if self.gui:
-                            self.gui.set_pause_timer(self.config.pause_duration_minutes * 60)
-                        await self.page.wait_for_timeout(self.config.pause_duration_minutes * 60 * 1000)
+                            self.gui.set_pause_timer(adaptive_pause)
+                        await self.page.wait_for_timeout(adaptive_pause * 1000)
                         unchanged_points_counter = 0
                 else:
                     self.last_points = current_points
                     unchanged_points_counter = 0
 
-                # Human-like delay between searches
-                sleep_time = random.uniform(self.config.min_sleep_seconds, self.config.max_sleep_seconds)
-                await self.page.wait_for_timeout(sleep_time * 1000)
+                # Human-like delay between searches with random mini-pauses
+                base_sleep = random.uniform(self.config.min_sleep_seconds, self.config.max_sleep_seconds)
+                # Occasionally add extra pause for more human-like behavior (20% chance)
+                if random.random() < 0.2:
+                    extra_pause = random.uniform(5, 15)
+                    self.logger.debug(f"Adding mini-pause of {extra_pause:.1f}s for natural behavior")
+                    base_sleep += extra_pause
+                
+                await self.page.wait_for_timeout(base_sleep * 1000)
 
         except Exception as e:
             self.logger.critical(f"A critical error occurred in the search loop: {e}", exc_info=True)

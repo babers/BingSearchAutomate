@@ -3,7 +3,8 @@
 
 import random
 import logging
-from typing import Dict, Set
+from typing import Dict, Set, List, Optional
+from collections import deque
 from .topic_provider import TopicProvider
 
 
@@ -84,25 +85,29 @@ class RuntimeTopicGenerator(TopicProvider):
         'impact on society', 'recent developments', 'latest research'
     ]
     
-    def __init__(self, config=None):
+    def __init__(self, config: Optional[Dict] = None):
         """Initialize the runtime topic generator.
         
         Args:
             config (dict, optional): Configuration dictionary with options like:
                 - 'cache_duplicates': Whether to track and avoid duplicate topics
                 - 'max_generation_attempts': Max attempts to avoid duplicates
+                - 'max_cache_size': Maximum number of topics to cache (default: 1000)
         """
         self.logger = logging.getLogger(__name__)
         self.config = config or {}
         
         self.generated_topics: Set[str] = set()
-        self.generation_count = 0
+        self.generation_count: int = 0
+        self.topic_order: deque = deque()  # Track insertion order for LRU eviction
         
-        self.cache_duplicates = self.config.get('cache_duplicates', True)
-        self.max_generation_attempts = self.config.get('max_generation_attempts', 10)
+        self.cache_duplicates: bool = self.config.get('cache_duplicates', True)
+        self.max_generation_attempts: int = self.config.get('max_generation_attempts', 10)
+        self.max_cache_size: int = self.config.get('max_cache_size', 1000)
         
         self.logger.info(
-            f"RuntimeTopicGenerator initialized (cache_duplicates={self.cache_duplicates})"
+            f"RuntimeTopicGenerator initialized (cache_duplicates={self.cache_duplicates}, "
+            f"max_cache_size={self.max_cache_size})"
         )
     
     def get_next_topic(self) -> str:
@@ -144,13 +149,25 @@ class RuntimeTopicGenerator(TopicProvider):
         if attempts >= self.max_generation_attempts:
             self.logger.debug(f"Max generation attempts reached, using duplicate topic: {topic}")
         
-        self.generated_topics.add(topic)
+        # Add to cache with LRU eviction if needed
+        if topic not in self.generated_topics:
+            self.generated_topics.add(topic)
+            self.topic_order.append(topic)
+            
+            # LRU eviction: Remove oldest topic if cache is full
+            if len(self.generated_topics) > self.max_cache_size:
+                oldest_topic = self.topic_order.popleft()
+                self.generated_topics.discard(oldest_topic)
+                self.logger.debug(
+                    f"Cache limit reached ({self.max_cache_size}), evicted oldest topic: {oldest_topic}"
+                )
+        
         self.generation_count += 1
         
         self.logger.debug(f"Generated topic #{self.generation_count}: {topic}")
         return topic
     
-    def reset(self):
+    def reset(self) -> None:
         """Reset provider state for a new search session.
         
         Clears the topic cache and resets counters.
@@ -159,9 +176,10 @@ class RuntimeTopicGenerator(TopicProvider):
             f"RuntimeTopicGenerator reset (generated {self.generation_count} unique topics)"
         )
         self.generated_topics.clear()
+        self.topic_order.clear()
         self.generation_count = 0
     
-    def get_statistics(self) -> Dict[str, int]:
+    def get_statistics(self) -> Dict[str, any]:
         """Get generation statistics.
         
         Returns:
@@ -171,5 +189,6 @@ class RuntimeTopicGenerator(TopicProvider):
             'generated_count': self.generation_count,
             'unique_topics': len(self.generated_topics),
             'generator_type': 'RuntimeTopicGenerator',
-            'cache_enabled': self.cache_duplicates
+            'cache_enabled': self.cache_duplicates,
+            'max_cache_size': self.max_cache_size
         }

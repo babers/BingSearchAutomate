@@ -3,11 +3,13 @@
 import tkinter as tk
 from tkinter import ttk
 import logging
+from typing import Optional
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.ticker import MaxNLocator
 from utils.elapsed_timer import get_elapsed, start as start_timer, stop as stop_timer
 from utils.network import is_connected
+from utils.metrics import MetricsCollector
 
 class GUI:
     def __init__(self, config, data_manager, browser_controller, *args, **kwargs):
@@ -15,6 +17,7 @@ class GUI:
         self.data_manager = data_manager
         self.browser_controller = browser_controller
         self.rewards_watcher = None
+        self.metrics_collector = MetricsCollector()
 
         if not hasattr(self, "root"):
             self.root = tk.Tk()
@@ -53,6 +56,22 @@ class GUI:
 
         self.network_label = ttk.Label(stats_frame, text="Network: Unknown", foreground="gray")
         self.network_label.pack(side=tk.LEFT, padx=10, pady=5)
+
+        # Statistics Frame (NEW)
+        metrics_frame = ttk.LabelFrame(main_frame, text="Session Statistics")
+        metrics_frame.pack(fill=tk.X, pady=5)
+
+        self.success_rate_label = ttk.Label(metrics_frame, text="Success Rate: N/A")
+        self.success_rate_label.pack(side=tk.LEFT, padx=10, pady=5)
+
+        self.searches_per_min_label = ttk.Label(metrics_frame, text="Searches/min: 0.0")
+        self.searches_per_min_label.pack(side=tk.LEFT, padx=10, pady=5)
+
+        self.points_per_search_label = ttk.Label(metrics_frame, text="Points/Search: 0.0")
+        self.points_per_search_label.pack(side=tk.LEFT, padx=10, pady=5)
+
+        self.eta_label = ttk.Label(metrics_frame, text="ETA: --:--:--")
+        self.eta_label.pack(side=tk.LEFT, padx=10, pady=5)
 
         # Control Frame
         control_frame = ttk.LabelFrame(main_frame, text="Controls")
@@ -100,9 +119,9 @@ class GUI:
     def _init_graph(self):
         """Initialize the graph with empty data."""
         self.ax.clear()
-        self.ax.set_xlabel('Rewards Points')
-        self.ax.set_ylabel('Search Number')
-        self.ax.set_title('Rewards Points vs Searches')
+        self.ax.set_xlabel('Search Number')
+        self.ax.set_ylabel('Rewards Points')
+        self.ax.set_title('Rewards Points Progress')
         self.ax.grid(True, alpha=0.3)
         self.ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         self.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
@@ -114,6 +133,8 @@ class GUI:
             self.logger.info("Start button clicked.")
             start_timer()
             self.data_manager.reset()
+            # Reset metrics for new session
+            self.metrics_collector.reset()
             # Reset watcher state to allow shutdown dialog to show again
             if hasattr(self, 'rewards_watcher') and self.rewards_watcher:
                 self.rewards_watcher.reset()
@@ -217,6 +238,40 @@ class GUI:
         except Exception as e:
             self.logger.warning(f"Could not update network status: {e}")
 
+    def update_statistics(self) -> None:
+        """Update the statistics display with current metrics (thread-safe)."""
+        try:
+            metrics = self.metrics_collector.get_metrics()
+            current_points = self.data_manager.rewards_points
+            target_points = self.config.target_points
+            
+            # Calculate statistics
+            success_rate = metrics.get_success_rate()
+            searches_per_min = metrics.get_searches_per_minute()
+            points_per_search = metrics.get_points_per_search()
+            eta_seconds = metrics.estimate_time_to_target(current_points, target_points)
+            
+            # Format ETA
+            if eta_seconds is not None and eta_seconds > 0:
+                eta_minutes, eta_secs = divmod(int(eta_seconds), 60)
+                eta_hours, eta_minutes = divmod(eta_minutes, 60)
+                eta_str = f"{eta_hours:02d}:{eta_minutes:02d}:{eta_secs:02d}"
+            else:
+                eta_str = "--:--:--"
+            
+            def _update():
+                try:
+                    self.success_rate_label.config(text=f"Success Rate: {success_rate:.1f}%")
+                    self.searches_per_min_label.config(text=f"Searches/min: {searches_per_min:.1f}")
+                    self.points_per_search_label.config(text=f"Points/Search: {points_per_search:.1f}")
+                    self.eta_label.config(text=f"ETA: {eta_str}")
+                except Exception:
+                    pass
+            
+            self.root.after(0, _update)
+        except Exception as e:
+            self.logger.warning(f"Could not update statistics: {e}")
+
     def update_graph(self):
         """Update the graph with current session data (thread-safe)."""
         try:
@@ -231,12 +286,12 @@ class GUI:
                         search_indices = [item[0] for item in session_history]
                         rewards_points = [item[1] for item in session_history]
                         
-                        # Plot: X axis = rewards points, Y axis = search number
-                        self.ax.plot(rewards_points, search_indices, marker='o', linestyle='-', color='b', linewidth=2, markersize=6)
+                        # Plot: X axis = search number, Y axis = rewards points
+                        self.ax.plot(search_indices, rewards_points, marker='o', linestyle='-', color='b', linewidth=2, markersize=6)
                     
-                    self.ax.set_xlabel('Rewards Points')
-                    self.ax.set_ylabel('Search Number')
-                    self.ax.set_title('Rewards Points vs Searches')
+                    self.ax.set_xlabel('Search Number')
+                    self.ax.set_ylabel('Rewards Points')
+                    self.ax.set_title('Rewards Points Progress')
                     self.ax.grid(True, alpha=0.3)
                     self.ax.xaxis.set_major_locator(MaxNLocator(integer=True))
                     self.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
@@ -254,6 +309,7 @@ class GUI:
             self.root.update()
             self.update_elapsed_time()
             self.update_network_status()
+            self.update_statistics()
             self.update_graph()
         except Exception:
             pass
