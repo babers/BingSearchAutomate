@@ -505,7 +505,7 @@ class BrowserController:
             try:
                 current_points = await self.get_current_points()
                 if current_points >= self.config.target_points:
-                    elapsed = elapsed_timer.stop()
+                    elapsed = elapsed_timer.pause()
                     self.logger.info(
                         f"Target reached (points={current_points}). Elapsed time: {elapsed:.1f} seconds"
                     )
