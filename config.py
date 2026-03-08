@@ -57,6 +57,7 @@ class Config:
         self.headless = browser_settings.get('headless', True)
         self.slow_mo_ms = browser_settings.get('slow_mo_ms', 0)
         self.storage_state_path = browser_settings.get('storage_state_path')
+        self.playwright_channel = browser_settings.get('channel')
 
         # Proxy Settings
         proxy_settings = config_data.get('proxy', {})
@@ -112,12 +113,36 @@ class Config:
             cfg = cls(config_data)
 
             app_dir = get_app_data_dir()
+
+            def resolve_runtime_path(path_value: Optional[str], default_name: str) -> str:
+                """Resolve runtime file paths to a writable per-user location.
+
+                Absolute paths are respected. Relative paths are placed in app data so
+                installed builds can write logs/databases without admin permissions.
+                """
+                if not path_value:
+                    return os.path.join(app_dir, default_name)
+                if os.path.isabs(path_value):
+                    return path_value
+                return os.path.join(app_dir, path_value)
+
             if not cfg.database_path:
                 cfg.database_path = os.path.join(app_dir, 'searches.db')
+            else:
+                cfg.database_path = resolve_runtime_path(cfg.database_path, 'searches.db')
+
             if not cfg.log_file_path:
                 cfg.log_file_path = os.path.join(app_dir, 'app.log')
+            else:
+                cfg.log_file_path = resolve_runtime_path(cfg.log_file_path, 'app.log')
+
             if not cfg.storage_state_path:
                 cfg.storage_state_path = os.path.join(app_dir, 'playwright_storage_state.json')
+            else:
+                cfg.storage_state_path = resolve_runtime_path(
+                    cfg.storage_state_path,
+                    'playwright_storage_state.json'
+                )
 
             return cfg
         except FileNotFoundError:

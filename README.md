@@ -129,6 +129,28 @@ For automatic dependency installation and execution:
 python tools/run_ensure.py
 ```
 
+### Build A Windows Installer
+
+To create a distributable installer (`.exe`) for Windows users:
+
+1. Install [Inno Setup 6](https://jrsoftware.org/isinfo.php)
+2. Run the packaging script from project root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
+```
+
+Build outputs:
+
+- `dist\BingSearchAutomate\` (PyInstaller app bundle)
+- `dist\installer\BingSearchAutomate-Setup-<version>.exe` (installer for distribution)
+
+Installer/runtime behavior:
+
+- Installs per-user to `%LOCALAPPDATA%\Programs\BingSearchAutomate` (no admin required)
+- App data is written to `%APPDATA%\BingSearchAutomate-Headless`
+- Uses installed Microsoft Edge by default (`browser.channel: msedge`)
+
 ## Configuration
 
 The application uses a `config.yaml` file for all settings. Key configuration options:
@@ -153,6 +175,7 @@ browser:
   headless: true                 # Run in headless mode
   slow_mo_ms: 0                  # Slowdown in milliseconds
   storage_state_path: 'storage_state.json'  # Session persistence
+  channel: 'msedge'              # Use installed Edge browser channel
 ```
 
 ### Stealth Settings

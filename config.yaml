@@ -25,6 +25,7 @@ browser:
   headless: true
   slow_mo_ms: 0
   storage_state_path: 'storage_state.json'
+  channel: 'msedge'  # Use installed Microsoft Edge (recommended for Windows installer builds)
 
 proxy:
   enabled: false

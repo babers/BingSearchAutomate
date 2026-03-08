@@ -72,14 +72,20 @@ class BrowserController:
         try:
             self.playwright = await async_playwright().start()
             # Launch headless Chromium for stealth
-            self.browser = await self.playwright.chromium.launch(
-                headless=self.config.headless,
-                slow_mo=self.config.slow_mo_ms,
-                args=[
+            launch_kwargs = {
+                'headless': self.config.headless,
+                'slow_mo': self.config.slow_mo_ms,
+                'args': [
                     '--disable-blink-features=AutomationControlled',  # Hide automation signature
                     '--disable-dev-shm-usage',  # Use /tmp instead of shared memory
                 ]
-            )
+            }
+
+            # When configured, use the installed browser channel (e.g., msedge).
+            if getattr(self.config, 'playwright_channel', None):
+                launch_kwargs['channel'] = self.config.playwright_channel
+
+            self.browser = await self.playwright.chromium.launch(**launch_kwargs)
             # Create a context with user agent to mimic real browser
             context_kwargs = {
                 "user_agent": USER_AGENT,
