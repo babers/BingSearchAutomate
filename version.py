@@ -1,8 +1,8 @@
 # version.py
 """Version information for Bing Search Automator."""
 
-__version__ = "2.0.0"
-__version_info__ = (2, 0, 0)
+__version__ = "2.0.1"
+__version_info__ = (2, 0, 1)
 
 # Version history:
 # 2.0.0 (2026-02-14):

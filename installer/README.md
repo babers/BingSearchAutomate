@@ -22,6 +22,28 @@ From the project root:
 powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
 ```
 
+## One-Command Release Build
+
+This script bumps version, runs sanity compile checks, builds installer, and
+generates release notes template automatically.
+
+```powershell
+# Default: bump patch version (e.g., 2.0.0 -> 2.0.1)
+powershell -ExecutionPolicy Bypass -File .\installer\release_build.ps1
+
+# Bump minor/major
+powershell -ExecutionPolicy Bypass -File .\installer\release_build.ps1 -Bump minor
+powershell -ExecutionPolicy Bypass -File .\installer\release_build.ps1 -Bump major
+
+# Set explicit version
+powershell -ExecutionPolicy Bypass -File .\installer\release_build.ps1 -Version 2.1.0
+```
+
+Outputs:
+
+- Installer: `dist\installer\BingSearchAutomate-Setup-<version>.exe`
+- Release notes template: `dist\release-notes\RELEASE_NOTES_v<version>.md`
+
 Fast rebuild options:
 
 ```powershell
