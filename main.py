@@ -7,7 +7,7 @@ import sys
 import os
 
 from config import Config
-from utils.logger import setup_logging
+from utils.logger import setup_logging, get_topics_logger
 from utils.network import is_connected, wait_for_connection
 from gui_module import GUI
 from browser_controller import BrowserController
@@ -21,8 +21,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 class Application:
     """Main application class to orchestrate the components."""
-    def __init__(self, config):
+    def __init__(self, config, topics_logger=None):
         self.config = config
+        self.topics_logger = topics_logger
         self.logger = logging.getLogger(__name__)
         self.logger.info("Initializing application components...")
 
@@ -54,10 +55,13 @@ class Application:
         topic_generator_type = getattr(config, 'topic_generator_type', 'runtime').lower()
         
         if topic_generator_type == 'runtime':
-            provider = RuntimeTopicGenerator(config={
-                'cache_duplicates': True,
-                'max_generation_attempts': 10
-            })
+            provider = RuntimeTopicGenerator(
+                config={
+                    'cache_duplicates': True,
+                    'max_generation_attempts': 10
+                },
+                topics_logger=self.topics_logger
+            )
             self.logger.info("Using RuntimeTopicGenerator for dynamic topic generation")
         else:
             provider = DailyTopics()
@@ -99,9 +103,19 @@ def main():
     # Display version
     logger = logging.getLogger(__name__)
     logger.info(f"Bing Search Automator v{__version__} starting...")
+    
+    # Set up topics logger (for runtime topic generation mode)
+    topics_log_file = None
+    if getattr(config, 'topic_generator_type', 'runtime').lower() == 'runtime':
+        # Create topics.log in same directory as app.log
+        log_dir = os.path.dirname(config.log_file_path)
+        topics_log_file = os.path.join(log_dir, 'topics.log')
+        logger.info(f"Runtime topic generation enabled. Topics will be logged to: {topics_log_file}")
+    
+    topics_logger = get_topics_logger(topics_log_file) if topics_log_file else None
 
     # Create and run the application
-    app = Application(config)
+    app = Application(config, topics_logger=topics_logger)
     
     # Ensure we have internet before starting
     if not is_connected():

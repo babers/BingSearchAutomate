@@ -85,7 +85,7 @@ class RuntimeTopicGenerator(TopicProvider):
         'impact on society', 'recent developments', 'latest research'
     ]
     
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[Dict] = None, topics_logger=None):
         """Initialize the runtime topic generator.
         
         Args:
@@ -93,8 +93,10 @@ class RuntimeTopicGenerator(TopicProvider):
                 - 'cache_duplicates': Whether to track and avoid duplicate topics
                 - 'max_generation_attempts': Max attempts to avoid duplicates
                 - 'max_cache_size': Maximum number of topics to cache (default: 1000)
+            topics_logger (logger, optional): Logger instance for recording search topics
         """
         self.logger = logging.getLogger(__name__)
+        self.topics_logger = topics_logger
         self.config = config or {}
         
         self.generated_topics: Set[str] = set()
@@ -165,6 +167,14 @@ class RuntimeTopicGenerator(TopicProvider):
         self.generation_count += 1
         
         self.logger.debug(f"Generated topic #{self.generation_count}: {topic}")
+        
+        # Log to topics.log if logger is available (runtime mode)
+        if self.topics_logger:
+            try:
+                self.topics_logger.info(topic)
+            except Exception as e:
+                self.logger.error(f"Failed to log topic to topics.log: {e}")
+        
         return topic
     
     def reset(self) -> None:

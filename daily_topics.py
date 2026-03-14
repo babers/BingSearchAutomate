@@ -62,6 +62,10 @@ class DailyTopics(TopicProvider):
         self._shuffled_index += 1
         return topic
 
+    def get_next_topic(self) -> str:
+        """Return next topic (TopicProvider interface implementation)."""
+        return self.next_topic_for_today()
+
     def _get_default_topics(self):
         """Fallback topics if day not found"""
         return ['Current world news', 'Scientific discoveries', 'Technology trends', 'Educational resources']

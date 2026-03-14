@@ -1,10 +1,20 @@
 # version.py
 """Version information for Bing Search Automator."""
 
-__version__ = "2.0.1"
-__version_info__ = (2, 0, 1)
+__version__ = "2.0.2"
+__version_info__ = (2, 0, 2)
 
 # Version history:
+# 2.0.2 (2026-03-13):
+#   - Added Help menu with About and in-app Documentation manual
+#   - Added completion dialog polish (centered, auto-close, audible cue)
+#   - Added session start/completion timestamps in statistics panel
+#   - Added runtime topic logging to logging/topics.log
+#   - Moved logs to local ./logging folder
+#   - Implemented field-level profile locking improvements
+#   - Removed testing_mode profile
+#   - Moved README-style markdown files under docs and excluded .md from installer
+#
 # 2.0.0 (2026-02-14):
 #   - Added real-time statistics dashboard with metrics tracking
 #   - Implemented configuration profiles (stealth/balanced/speed/testing)

@@ -95,6 +95,10 @@ class Config:
                 path = file_path or 'config.yaml'
             with open(path, 'r') as f:
                 config_data = yaml.safe_load(f)
+
+            # Use persisted profile from config when CLI profile is not provided.
+            if not profile:
+                profile = config_data.get('active_profile')
             
             # Apply profile if specified
             if profile:
@@ -111,8 +115,12 @@ class Config:
                     )
             
             cfg = cls(config_data)
+            cfg.source_config_path = path
+            cfg.active_profile = profile
 
             app_dir = get_app_data_dir()
+            work_dir = os.getcwd()
+            local_logging_dir = os.path.join(work_dir, 'logging')
 
             def resolve_runtime_path(path_value: Optional[str], default_name: str) -> str:
                 """Resolve runtime file paths to a writable per-user location.
@@ -126,15 +134,27 @@ class Config:
                     return path_value
                 return os.path.join(app_dir, path_value)
 
+            def resolve_log_path(path_value: Optional[str]) -> str:
+                """Resolve log file paths to local ./logging folder for easier access.
+
+                Absolute paths are respected. Relative/default values are mapped to
+                the current working directory under ./logging.
+                """
+                if not path_value:
+                    return os.path.join(local_logging_dir, 'app.log')
+                if os.path.isabs(path_value):
+                    return path_value
+                return os.path.join(local_logging_dir, os.path.basename(path_value))
+
             if not cfg.database_path:
                 cfg.database_path = os.path.join(app_dir, 'searches.db')
             else:
                 cfg.database_path = resolve_runtime_path(cfg.database_path, 'searches.db')
 
             if not cfg.log_file_path:
-                cfg.log_file_path = os.path.join(app_dir, 'app.log')
+                cfg.log_file_path = os.path.join(local_logging_dir, 'app.log')
             else:
-                cfg.log_file_path = resolve_runtime_path(cfg.log_file_path, 'app.log')
+                cfg.log_file_path = resolve_log_path(cfg.log_file_path)
 
             if not cfg.storage_state_path:
                 cfg.storage_state_path = os.path.join(app_dir, 'playwright_storage_state.json')

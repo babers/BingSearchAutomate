@@ -166,19 +166,6 @@ python main.py --profile speed_mode
 - Short delays (5-10s)
 - No typos or mouse movements
 
-#### 🧪 `testing_mode`
-
-Quick testing with visible browser
-
-```bash
-python main.py --profile testing_mode
-```
-
-- Target: only 10 points
-- Minimal delays (2-3s)
-- Non-headless (visible browser)
-- Debug logging enabled
-
 **Profile Structure:**
 
 ```yaml
@@ -283,7 +270,7 @@ python main.py --profile stealth_mode
 ### Fast Testing
 
 ```bash
-python main.py --profile testing_mode
+python main.py --profile speed_mode
 ```
 
 ### Custom Config File
@@ -351,7 +338,6 @@ config = {
 # - stealth_mode
 # - balanced_mode
 # - speed_mode
-# - testing_mode
 ```
 
 ---
@@ -435,7 +421,7 @@ All planned improvements are complete! The system now has:
 If you encounter issues:
 
 1. Check DEBUG logs for detailed information
-2. Try different profiles (`--profile testing_mode`)
+2. Try different profiles (`--profile speed_mode`)
 3. Review fallback selector logs for points extraction
 4. Monitor success rate in statistics dashboard
 

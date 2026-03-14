@@ -8,7 +8,6 @@ main_script = os.path.join(project_root, 'main.py')
 
 project_datas = [
     (os.path.join(project_root, 'config.yaml'), '.'),
-    (os.path.join(project_root, 'README.md'), '.'),
     (os.path.join(project_root, 'LICENSE'), '.'),
 ]
 

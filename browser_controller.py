@@ -18,6 +18,8 @@ from utils import elapsed_timer
 from utils.human_typing import HumanTyping
 from utils.proxy_rotation import create_proxy_rotator_from_config
 from utils.topic_provider import TopicProvider
+from daily_topics import DailyTopics
+from utils.runtime_topic_generator import RuntimeTopicGenerator
 
 # Constants
 USER_AGENT = (
@@ -41,31 +43,58 @@ class BrowserController:
         self.logger = logging.getLogger(__name__)
         self.last_points = 0
         self.stop_event = threading.Event()
-        
-        # Initialize human typing simulator
+        self.running = False
+        self.force_browser_reset = False
+        self.apply_runtime_config(reset_browser=False)
+
+    def apply_runtime_config(self, reset_browser: bool = True):
+        """Apply in-memory config updates without requiring app restart."""
         self.human_typer = HumanTyping(
-            mistake_probability=config.mistake_probability if config.simulate_mistakes else 0.0,
-            char_delay_ms=(50, 200) if config.typing_speed_variance else (100, 120),
+            mistake_probability=self.config.mistake_probability if self.config.simulate_mistakes else 0.0,
+            char_delay_ms=(50, 200) if self.config.typing_speed_variance else (100, 120),
             word_pause_ms=(100, 400),
             correction_delay_ms=(200, 600)
         )
-        
-        # Store stealth settings
-        self.random_mouse_movements = config.random_mouse_movements
-        
-        # Initialize proxy rotator if enabled
+
+        self.random_mouse_movements = self.config.random_mouse_movements
+
         self.proxy_rotator = None
-        if config.proxy_enabled:
+        if self.config.proxy_enabled:
             proxy_config = {
-                'enabled': config.proxy_enabled,
-                'rotation_strategy': config.proxy_rotation_strategy,
-                'proxies': config.proxy_list
+                'enabled': self.config.proxy_enabled,
+                'rotation_strategy': self.config.proxy_rotation_strategy,
+                'proxies': self.config.proxy_list
             }
             self.proxy_rotator = create_proxy_rotator_from_config(proxy_config)
             if self.proxy_rotator:
                 self.logger.info(f"Proxy rotation enabled with {len(self.proxy_rotator.proxies)} proxies")
             else:
                 self.logger.warning("Proxy enabled but no valid proxies configured")
+
+        topic_generator_type = getattr(self.config, 'topic_generator_type', 'runtime').lower()
+        if topic_generator_type == 'runtime' and not isinstance(self.topics_provider, RuntimeTopicGenerator):
+            self.topics_provider = RuntimeTopicGenerator(config={
+                'cache_duplicates': True,
+                'max_generation_attempts': 10
+            })
+            self.logger.info("Switched topic provider to RuntimeTopicGenerator")
+        elif topic_generator_type != 'runtime' and not isinstance(self.topics_provider, DailyTopics):
+            self.topics_provider = DailyTopics()
+            self.logger.info("Switched topic provider to DailyTopics")
+
+        if reset_browser:
+            self.force_browser_reset = True
+
+    async def _wait_with_stop(self, seconds: float, chunk_seconds: float = 0.25) -> bool:
+        """Wait in short intervals so Stop can interrupt quickly."""
+        remaining = max(0.0, float(seconds))
+        while remaining > 0:
+            if self.stop_event.is_set() or not self.running:
+                return False
+            sleep_for = min(chunk_seconds, remaining)
+            await asyncio.sleep(sleep_for)
+            remaining -= sleep_for
+        return True
 
     async def _setup_browser(self):
         """Initialize Playwright and launch a headless browser."""
@@ -195,8 +224,11 @@ class BrowserController:
 
     async def _ensure_browser_ready(self):
         """Ensure browser is ready, recreate if needed."""
-        if not self._is_browser_alive():
-            self.logger.warning("Browser is not alive, setting up new browser instance...")
+        if self.force_browser_reset or not self._is_browser_alive():
+            if self.force_browser_reset:
+                self.logger.info("Applying updated browser settings by recreating browser context...")
+            else:
+                self.logger.warning("Browser is not alive, setting up new browser instance...")
             try:
                 # Clean up old references
                 await self._close_browser()
@@ -204,6 +236,7 @@ class BrowserController:
                 self.logger.debug(f"Error during cleanup: {cleanup_error}")
             # Set up fresh browser
             await self._setup_browser()
+            self.force_browser_reset = False
 
     async def _close_browser(self):
         """Gracefully close the browser and context."""
@@ -254,7 +287,8 @@ class BrowserController:
             await self.page.goto(self.config.rewards_url, wait_until='networkidle', timeout=30000)
             
             # Add realistic human delay before parsing
-            await self.page.wait_for_timeout(random.uniform(2000, 4000))
+            if not await self._wait_with_stop(random.uniform(2.0, 4.0)):
+                return self.last_points
             
             # Try multiple selectors with fallback chain
             selectors = [
@@ -334,9 +368,12 @@ class BrowserController:
                 
                 self.logger.info(f"Navigating to search URL (attempt {attempt + 1}/{MAX_RETRY_ATTEMPTS})")
                 await self.page.goto(self.config.search_url, wait_until='networkidle')
+                if self.stop_event.is_set() or not self.running:
+                    return
                 
                 # Add human-like random delay before typing
-                await self.page.wait_for_timeout(random.uniform(500, 2000))
+                if not await self._wait_with_stop(random.uniform(0.5, 2.0)):
+                    return
                 
                 # Perform random mouse movements if enabled (adds human-like behavior)
                 if self.random_mouse_movements:
@@ -347,7 +384,8 @@ class BrowserController:
                 await search_box.click()
                 
                 # Add small delay after click (human reaction time)
-                await asyncio.sleep(random.uniform(0.1, 0.3))
+                if not await self._wait_with_stop(random.uniform(0.1, 0.3), chunk_seconds=0.1):
+                    return
                 
                 # Use human typing with mistake simulation
                 await self.human_typer.type_like_human(
@@ -355,16 +393,20 @@ class BrowserController:
                     term, 
                     simulate_mistakes=self.config.simulate_mistakes
                 )
+                if self.stop_event.is_set() or not self.running:
+                    return
                 
                 # Brief pause before pressing Enter (human thinking time)
-                await asyncio.sleep(random.uniform(0.3, 0.8))
+                if not await self._wait_with_stop(random.uniform(0.3, 0.8), chunk_seconds=0.1):
+                    return
                 
                 # Press Enter
                 await search_box.press('Enter')
                 self.logger.info(f"Performed search for term: '{term}'")
                 
                 # Wait for page to fully load with human-like thinking time
-                await self.page.wait_for_timeout(random.uniform(self.config.min_sleep_seconds * 1000, self.config.max_sleep_seconds * 1000))
+                if not await self._wait_with_stop(random.uniform(self.config.min_sleep_seconds, self.config.max_sleep_seconds)):
+                    return
                 return
                 
             except PlaywrightError as e:
@@ -376,21 +418,24 @@ class BrowserController:
                     self.browser = None
                     if attempt < MAX_RETRY_ATTEMPTS - 1:
                         self.logger.info(f"Retrying in {backoff_delay}s (exponential backoff)...")
-                        await asyncio.sleep(backoff_delay)
+                        if not await self._wait_with_stop(backoff_delay):
+                            return
                         continue
                 self.logger.warning(f"Playwright error on attempt {attempt + 1} for term '{term}': {e}")
                 if attempt == MAX_RETRY_ATTEMPTS - 1:
                     self.logger.error(f"All retries exhausted for term '{term}'.")
                     raise
                 self.logger.info(f"Retrying in {backoff_delay}s (exponential backoff)...")
-                await asyncio.sleep(backoff_delay)
+                if not await self._wait_with_stop(backoff_delay):
+                    return
             except Exception as e:
                 self.logger.warning(f"Search attempt {attempt + 1} failed for term '{term}': {e}")
                 if attempt == MAX_RETRY_ATTEMPTS - 1:
                     self.logger.error(f"All retries exhausted for term '{term}'.")
                     raise
                 self.logger.info(f"Retrying in {backoff_delay}s (exponential backoff)...")
-                await asyncio.sleep(backoff_delay)
+                if not await self._wait_with_stop(backoff_delay):
+                    return
 
     def start_searching(self):
         """Starts the search loop in a new thread."""
@@ -488,7 +533,8 @@ class BrowserController:
                         )
                         if self.gui:
                             self.gui.set_pause_timer(adaptive_pause)
-                        await self.page.wait_for_timeout(adaptive_pause * 1000)
+                        if not await self._wait_with_stop(adaptive_pause):
+                            break
                         unchanged_points_counter = 0
                 else:
                     self.last_points = current_points
@@ -502,7 +548,8 @@ class BrowserController:
                     self.logger.debug(f"Adding mini-pause of {extra_pause:.1f}s for natural behavior")
                     base_sleep += extra_pause
                 
-                await self.page.wait_for_timeout(base_sleep * 1000)
+                if not await self._wait_with_stop(base_sleep):
+                    break
 
         except Exception as e:
             self.logger.critical(f"A critical error occurred in the search loop: {e}", exc_info=True)
